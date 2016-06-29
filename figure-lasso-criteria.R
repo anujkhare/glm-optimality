@@ -60,8 +60,38 @@ for(step.i in 1:nrow(beta.scaled)){
 }
 lars.path <- do.call(rbind, lars.path.list)
 
+# fixing scale at 1 gives better opt. criteria than estimating scale
+fit.iregnet <- iregnet(X, cbind(y, y), "gaussian")
+print (fit.iregnet)
+# fit.iregnet <- iregnet(X, cbind(y, y), "gaussian")
+iregnet.path.list <- list()
+for(i in 1:length(fit.iregnet$lambda)) {
+	iregnet.path.list[[paste(i)]] <- data.table(
+			lambda = fit.iregnet$lambda[[i]],
+			coef = fit.iregnet$beta[2:9, i],
+			arclength = sum(abs(fit.iregnet$beta[, i])),
+			variable = colnames(X)
+		)
+}
+
+iregnet.path <- do.call(rbind, iregnet.path.list)
+
+# iregnet also uses 1/2 (MSE) cost function
+lars.at.iregnet.lambda <- predict(
+  fit.lars,
+  s=fit.iregnet$lambda * nrow(X),
+  type="coefficients", mode="lambda")
+
+coef.mat.list <- list(
+  iregnet=t(fit.iregnet$beta[2:(ncol(X)+1), ]),
+  lars=lars.at.iregnet.lambda$coefficients)
+
+lapply(coef.mat.list, head)
+coef.mat.lambda <- fit.iregnet$lambda
+
+# GLMNET
 glmnet.thresh <- 1e-07
-fit.glmnet <- glmnet(X, y, standardize=FALSE, thresh=glmnet.thresh)
+fit.glmnet <- glmnet(X, y, standardize=FALSE, thresh=glmnet.thresh, lambda=fit.iregnet$lambda)
 glmnet.path.list <- list()
 for(lambda.i in 1:ncol(fit.glmnet$beta)){
   coef.vec <- coef(fit.glmnet)[, lambda.i]
@@ -74,15 +104,18 @@ for(lambda.i in 1:ncol(fit.glmnet$beta)){
 }
 glmnet.path <- do.call(rbind, glmnet.path.list)
 
-lars.at.glmnet.lambda <- predict(
-  fit.lars,
-  s=fit.glmnet$lambda * nrow(X),
-  type="coefficients", mode="lambda")
-coef.mat.list <- list(
-  glmnet=t(fit.glmnet$beta),
-  lars=lars.at.glmnet.lambda$coefficients)
-lapply(coef.mat.list, head)
-coef.mat.lambda <- fit.glmnet$lambda
+# lars.at.glmnet.lambda <- predict(
+#   fit.lars,
+#   s=fit.glmnet$lambda * nrow(X),
+#   type="coefficients", mode="lambda")
+# coef.mat.list <- list(
+#   glmnet=t(fit.glmnet$beta),
+#   lars=lars.at.glmnet.lambda$coefficients)
+# lapply(coef.mat.list, head)
+# coef.mat.lambda <- fit.glmnet$lambda
+# 
+coef.mat.list$glmnet <- t(fit.glmnet$beta)
+
 
 ## penalized pacakge.
 fit.penalized.list <- with(fit.glmnet, penalized(
@@ -102,9 +135,9 @@ ss <- sum(residuals * residuals)
 ## https://github.com/cran/penalized/blob/master/R/linear.R#L18
 (loglik <- (-n/2) * (log(2*pi/n) + 1 + log(ss + .Machine$double.xmin)))
 fit.penalized@loglik
-stopifnot(fit.penalized@loglik == loglik)
+# stopifnot(fit.penalized@loglik == loglik)
 ## without adding inside the log, still equal.
-stopifnot(fit.penalized@loglik == (-n/2) * (log(2*pi/n) + 1 + log(ss)))
+# stopifnot(fit.penalized@loglik == (-n/2) * (log(2*pi/n) + 1 + log(ss)))
 
 ## some checks using un-regularized glm solver.
 fit.unregularized <- glm(y ~ X)
@@ -131,7 +164,7 @@ lassoDualityGap <- function
   stopifnot(is.numeric(y))
   stopifnot(is.numeric(w))
   stopifnot(is.numeric(lambda))
-  stopifnot(length(lambda) == 1) 
+  stopifnot(length(lambda) == 1)
   stopifnot(nrow(X) == length(y))
   stopifnot(ncol(X) == length(w))
   dual.norm <- function(x)max(abs(x))
@@ -162,7 +195,7 @@ lassoDualityGap <- function
   ## zero in the duality gap is lambda * psi^*(-Xk/lambda).
   ## penalty.conjugate.arg <- - t(X) %*% dual.vec / lambda
   ## penalty.conjugate <- dual.norm(penalty.conjugate.arg)
-  ## stopifnot(penalty.conjugate <= 1) 
+  ## stopifnot(penalty.conjugate <= 1)
   primal.cost + loss.conjugate
 ### The duality gap, a numeric scalar which gives an upper bound on
 ### the difference between this value of the cost function, and the
@@ -229,7 +262,7 @@ subdifferentialCriteria <- function
   stopifnot(is.numeric(y))
   stopifnot(is.numeric(w))
   stopifnot(is.numeric(lambda))
-  stopifnot(length(lambda) == 1) 
+  stopifnot(length(lambda) == 1)
   stopifnot(nrow(X) == length(y))
   stopifnot(ncol(X) == length(w))
   stopifnot(is.numeric(alpha))
@@ -249,7 +282,7 @@ subdifferentialCriteria <- function
 
 library(ggplot2)
 addColumn <- function(dt, pkg){
-  data.table(dt, pkg=factor(pkg, c("spams", "glmnet", "penalized")))
+  data.table(dt, pkg=factor(pkg, c("spams", "glmnet", "penalized", "iregnet")))
 }
 ggplot()+
   theme_bw()+
@@ -263,6 +296,11 @@ ggplot()+
   geom_point(
     aes(lambda, coef, colour=variable),
     addColumn(spams.path, "spams"),
+    shape=1
+    )+
+  geom_point(
+    aes(lambda, coef, colour=variable),
+    addColumn(spams.path, "iregnet"),
     shape=1
     )+
   geom_line(
@@ -282,6 +320,11 @@ fig.coef.path <- ggplot()+
   geom_point(
     aes(arclength, coef, colour=variable),
     addColumn(spams.path, "spams"),
+    shape=1
+    )+
+  geom_point(
+    aes(arclength, coef, colour=variable),
+    addColumn(iregnet.path, "iregnet"),
     shape=1
     )+
   geom_line(
