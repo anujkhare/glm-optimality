@@ -12,27 +12,27 @@ require(survival)
 ## http://spams-devel.gforge.inria.fr/hitcounter2.php?file=33815/spams-R-v2.5-svn2014-07-04.tar.gz
 get_data <- function()
 {
-	data(prostate,package="ElemStatLearn")
-	pros <- subset(prostate,select=-train,train==TRUE)
-	ycol <- which(names(pros)=="lpsa")
-	X.unscaled <- as.matrix(pros[-ycol])
-	y.unscaled <- pros[[ycol]]
-	M <- matrix(
-	  colMeans(X.unscaled), nrow(X.unscaled), ncol(X.unscaled), byrow=TRUE)
-	X.centered <- X.unscaled - M
-	sd.vec <- apply(X.unscaled, 2, sd)
-	S <- diag(1/sd.vec)
-	X.scaled <- X.centered %*% S
-	dimnames(X.scaled) <- dimnames(X.unscaled)
-	m <- mean(y.unscaled)
-	sigma <- sd(y.unscaled)
-	y.scaled <- (y.unscaled - m)/sigma
-	
-	## X and y will be used in the various solvers.
-	X <- X.scaled
-	y <- y.scaled
-	y_censored <- cbind(y, y)
-	list("x" = X, "y" = y, "y_censored" = y_censored)
+  data(prostate,package="ElemStatLearn")
+  pros <- subset(prostate,select=-train,train==TRUE)
+  ycol <- which(names(pros)=="lpsa")
+  X.unscaled <- as.matrix(pros[-ycol])
+  y.unscaled <- pros[[ycol]]
+  M <- matrix(
+    colMeans(X.unscaled), nrow(X.unscaled), ncol(X.unscaled), byrow=TRUE)
+  X.centered <- X.unscaled - M
+  sd.vec <- apply(X.unscaled, 2, sd)
+  S <- diag(1/sd.vec)
+  X.scaled <- X.centered %*% S
+  dimnames(X.scaled) <- dimnames(X.unscaled)
+  m <- mean(y.unscaled)
+  sigma <- sd(y.unscaled)
+  y.scaled <- (y.unscaled - m)/sigma
+
+  ## X and y will be used in the various solvers.
+  X <- X.scaled
+  y <- y.scaled
+  y_censored <- cbind(y, y)
+  list("x" = X, "y" = y, "y_censored" = y_censored)
 }
 
 compute_gradient <- function(X, y_censored, beta, scale, dist) {
@@ -93,72 +93,72 @@ subdifferentialCriteria_iregnet <- function
 }
 
 plot_optimality_criteria <- function(coef.mat.list, scale.mat, coef.mat.lambda, title, fname, alpha,
-																	 	 X=X, y_censored=y_censored, iregnet.dist=iregnet.dist)
+                                      X=X, y_censored=y_censored, iregnet.dist=iregnet.dist)
 {
-	convergence.list <- list()
-	for(pkg in names(coef.mat.list)){
-	  print(pkg)
-	  coef.mat <- coef.mat.list[[pkg]]
-		# FIXME: CHANGED
-		# coef.mat.lambda <- lambda.path.list[[pkg]]
-	  scale.list <- scale.mat[[pkg]]
-	  for(lambda.i in seq_along(coef.mat.lambda)){
-	    weight.vec <- coef.mat[lambda.i, ]
-	    lambda <- coef.mat.lambda[[lambda.i]]
-	    scale <- scale.list[[lambda.i]]
-	
-	    p <- ncol(X)
+  convergence.list <- list()
+  for(pkg in names(coef.mat.list)){
+    print(pkg)
+    coef.mat <- coef.mat.list[[pkg]]
+    # FIXME: CHANGED
+    # coef.mat.lambda <- lambda.path.list[[pkg]]
+    scale.list <- scale.mat[[pkg]]
+    for(lambda.i in seq_along(coef.mat.lambda)){
+      weight.vec <- coef.mat[lambda.i, ]
+      lambda <- coef.mat.lambda[[lambda.i]]
+      scale <- scale.list[[lambda.i]]
+
+      p <- ncol(X)
       print(p)
-	    # print (scale)
-	    gradients <- compute_gradient(X, y_censored, weight.vec, scale, iregnet.dist)
-	    mu <- gradients$mu
-	    gradients <- gradients$gradients * scale ** 2 # FIXME: scale factor in calculated values! :P
-	    # gradients <- gradients$gradients
-	    param.criteria <- subdifferentialCriteria_iregnet(gradients[2:(p+1)], gradients[1], gradients[p+2],
-	                                                      weight.vec[2:(p+1)], lambda, alpha)
-	
-	    param.criteria <- param.criteria[2:(p+1)]
-	    criterion.value <- c(
-	      # dualityGap=lassoDualityGap(y, X, weight.vec, lambda),
-	      subdifferentialL1=sum(abs(param.criteria)),
-	      subdifferentialLInf=max(abs(param.criteria)),
-	      subdifferentialL2=sqrt(sum(param.criteria * param.criteria)))
-	
-			# FIXME: CHANGED!
-	    # convergence.list[[paste(pkg, lambda_path[[lambda.i]])]] <- data.table(
-	    convergence.list[[paste(pkg, lambda)]] <- data.table(
-	      pkg, lambda, criterion.value, criterion.name=names(criterion.value))
-		}
-	}
-	convergence <- do.call(rbind, convergence.list)
-	# print(convergence)
+      # print (scale)
+      gradients <- compute_gradient(X, y_censored, weight.vec, scale, iregnet.dist)
+      mu <- gradients$mu
+      gradients <- gradients$gradients * scale ** 2 # FIXME: scale factor in calculated values! :P
+      # gradients <- gradients$gradients
+      param.criteria <- subdifferentialCriteria_iregnet(gradients[2:(p+1)], gradients[1], gradients[p+2],
+                                                        weight.vec[2:(p+1)], lambda, alpha)
+
+      param.criteria <- param.criteria[2:(p+1)]
+      criterion.value <- c(
+        # dualityGap=lassoDualityGap(y, X, weight.vec, lambda),
+        subdifferentialL1=sum(abs(param.criteria)),
+        subdifferentialLInf=max(abs(param.criteria)),
+        subdifferentialL2=sqrt(sum(param.criteria * param.criteria)))
+
+      # FIXME: CHANGED!
+      # convergence.list[[paste(pkg, lambda_path[[lambda.i]])]] <- data.table(
+      convergence.list[[paste(pkg, lambda)]] <- data.table(
+        pkg, lambda, criterion.value, criterion.name=names(criterion.value))
+    }
+  }
+  convergence <- do.call(rbind, convergence.list)
+  # print(convergence)
   print("done there!")
-	
-	## Accuracy of different solvers using the four different criteria.
-	with.legend <- ggplot()+
-	  ggtitle(title)+
-	  theme_bw()+
-	  theme(panel.margin=grid::unit(0, "lines"))+
-	  facet_grid(criterion.name ~ ., scales="free")+
-	  geom_point(aes(log10(lambda), log10(criterion.value), color=pkg),
-	             shape=1,
-	             data=convergence)
-	(with.labels <- direct.label(with.legend+xlim(min(log10(lambda)), 0), "first.polygons"))
-	pdf(fname)
-	print(with.labels)
-	dev.off()
+
+  ## Accuracy of different solvers using the four different criteria.
+  with.legend <- ggplot()+
+    ggtitle(title)+
+    theme_bw()+
+    theme(panel.margin=grid::unit(0, "lines"))+
+    facet_grid(criterion.name ~ ., scales="free")+
+    geom_point(aes(log10(lambda), log10(criterion.value), color=pkg),
+               shape=1,
+               data=convergence)
+  (with.labels <- direct.label(with.legend+xlim(min(log10(lambda)), 0), "first.polygons"))
+  pdf(fname)
+  print(with.labels)
+  dev.off()
 }
 
 # get_var_path <- function(fit.iregnet, lambda_path)
 # {
 #   iregnet.path.list <- list()
 #   for(i in 1:length(lambda_path)) {
-#   	iregnet.path.list[[paste(i)]] <- data.table(
-#   			lambda = fit.iregnet$lambda[[i]],
-#   			coef = fit.iregnet$beta,
-#   			arclength = sum(abs(fit.iregnet$beta[, i])),
-#   			variable = c("intercept", colnames(X))
-#   		)
+#     iregnet.path.list[[paste(i)]] <- data.table(
+#         lambda = fit.iregnet$lambda[[i]],
+#         coef = fit.iregnet$beta,
+#         arclength = sum(abs(fit.iregnet$beta[, i])),
+#         variable = c("intercept", colnames(X))
+#       )
 #   }
 #   # iregnet.path <- do.call(rbind, iregnet.path.list)
 # }
@@ -167,30 +167,30 @@ fit_and_plot <- function(thresholds, iregnet.dist, iregnet.alpha, X, y,
                         iregnet.scale_init, iregnet.estimate_scale, iregnet.maxiter, iregnet.unreg)
 {
   thresholds <- sort(thresholds) # so that the lambda path is as accurate as possible
-  
+
   coef.mat.list <- list()
   scale.mat <- list()
   coef.mat.lambda <- NA
-  
+
   for (threshold in thresholds) {
     # fixing scale at 1 gives better opt. criteria than estimating scale
     name <- as.character(threshold)
-    
+
     print(y)
     fit.iregnet <- iregnet(X, y, alpha=iregnet.alpha, iregnet.dist, maxiter=iregnet.maxiter, threshold=threshold,
                            scale_init=iregnet.scale_init, estimate_scale=iregnet.estimate_scale, unreg_sol=iregnet.unreg)
     print(fit.iregnet)
-    
+
     # only store the lambdas for the first fit, use the same for other fits
     if (is.na(coef.mat.lambda)) {
       lambda_path <- fit.iregnet$lambda * (fit.iregnet$scale ** 2) # LAMBDA PATH TO USE
       coef.mat.lambda <- lambda_path
     }
-    
+
     # NOTE: get_var_path has the code for the path of the vars!
     coef.mat.list[[name]] = t(fit.iregnet$beta)
     lapply(coef.mat.list, head)
-    
+
     scale.mat[[name]] <- fit.iregnet$scale
   }
 
@@ -200,7 +200,7 @@ fit_and_plot <- function(thresholds, iregnet.dist, iregnet.alpha, X, y,
   ## Compute the subdifferentials and plot the norms
   print("HEY HEY HEY!")
   plot_optimality_criteria(coef.mat.list, scale.mat, coef.mat.lambda, title, fname, iregnet.alpha,
-  												 X=X, y_censored=y, iregnet.dist=iregnet.dist)
+                           X=X, y_censored=y, iregnet.dist=iregnet.dist)
 }
 
 get_xy <- function(n_obs, n_vars, type = c('none', 'right', 'left', 'interval'), standardize=std, positive=F) {
